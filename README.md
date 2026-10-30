@@ -8,19 +8,25 @@ This tool aims to enhance cybersecurity by monitoring system processes for suspi
 
 ### Installation
 
+Clone this repository, then install the tool's only third-party dependency:
+
 ```
-pip install monitor-process-monitor
+pip install psutil
 ```
+
+(The repository ships no requirements.txt; `psutil` is the only import in main.py that is not part of the Python standard library.)
 
 ### Usage Examples
 
 ```bash
 # Run the tool with default arguments
-monitor-process-monitor
+python main.py
 
-# Run the tool with custom arguments
-monitor-process-monitor --interval 60 --output-file log.txt
+# Run the tool with custom arguments (check every 60 seconds, log to log.txt)
+python main.py --interval 60 --log log.txt
 ```
+
+Options: `-t` / `--threshold` sets the CPU usage percentage that triggers an alert (default 80), `-i` / `--interval` sets the seconds between checks (default 5), and `-l` / `--log` sets the log file path (default process_monitor.log).
 
 ### Security Warnings
 
