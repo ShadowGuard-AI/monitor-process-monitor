@@ -36,7 +36,14 @@ def main():
     """
     parser = setup_argparse()
     args = parser.parse_args()
-    
+
+    if args.interval <= 0:
+        print("Error: Interval must be a positive integer.")
+        sys.exit(1)
+    if args.threshold < 0 or args.threshold > 100:
+        print("Error: Threshold must be between 0 and 100.")
+        sys.exit(1)
+
     # Configure logging
     logging.basicConfig(
         filename=args.log,
@@ -48,18 +55,37 @@ def main():
     logging.info(f"Threshold: {args.threshold}%")
     logging.info(f"Interval: {args.interval} seconds")
     
+    seen_pids = set()
+    alerted_pids = set()
+
     try:
         while True:
+            current_pids = set()
             for proc in psutil.process_iter(attrs=['pid', 'name', 'cpu_percent']):
                 try:
+                    pid = proc.info['pid']
+                    current_pids.add(pid)
+                    if pid not in seen_pids:
+                        # The first cpu_percent reading for a process is a
+                        # priming reading with no meaning, so a newly seen
+                        # process is primed here and can only alert from
+                        # its next cycle.
+                        seen_pids.add(pid)
+                        continue
                     cpu_usage = proc.info['cpu_percent']
                     if cpu_usage > args.threshold:
-                        logging.warning(
-                            f"High CPU Usage Detected - PID: {proc.info['pid']}, "
-                            f"Name: {proc.info['name']}, CPU: {cpu_usage}%"
-                        )
+                        if pid not in alerted_pids:
+                            alerted_pids.add(pid)
+                            logging.warning(
+                                f"High CPU Usage Detected - PID: {pid}, "
+                                f"Name: {proc.info['name']}, CPU: {cpu_usage}%"
+                            )
+                    else:
+                        alerted_pids.discard(pid)
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
+            seen_pids.intersection_update(current_pids)
+            alerted_pids.intersection_update(current_pids)
             psutil.time.sleep(args.interval)
     except KeyboardInterrupt:
         logging.info("Process Monitor Stopped by User")
