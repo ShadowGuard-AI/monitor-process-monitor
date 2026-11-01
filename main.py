@@ -73,8 +73,19 @@ def main():
                         seen_pids.add(pid)
                         continue
                     cpu_usage = proc.info['cpu_percent']
+                    # psutil reports a process's CPU as a share of one core, so a
+                    # multithreaded process reads several hundred percent while
+                    # my argument validation caps the threshold at 100. The two
+                    # ends of that comparison were written against different
+                    # scales, and in practice any busy multithreaded process
+                    # crosses any threshold I am allowed to set.
                     if cpu_usage > args.threshold:
                         if pid not in alerted_pids:
+                            # Once alerted, a process stays in this set until a cycle
+                            # catches it below the threshold. A process that pins the CPU
+                            # for a week produces exactly one warning line from me, on
+                            # the first hot cycle, and the log says nothing about how
+                            # long it stayed hot.
                             alerted_pids.add(pid)
                             logging.warning(
                                 f"High CPU Usage Detected - PID: {pid}, "
@@ -84,8 +95,18 @@ def main():
                         alerted_pids.discard(pid)
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
+            # Everything I know is rebuilt from polls. A process that
+            # starts and finishes inside one interval never appears in
+            # any cycle, and a process already running when I start is
+            # primed silently, so my record covers only processes that
+            # lived across at least two of my cycles and crossed the
+            # threshold after their first.
             seen_pids.intersection_update(current_pids)
             alerted_pids.intersection_update(current_pids)
+            # This reaches the time module through psutil, which
+            # re-exports it. It works, and it is the kind of accidental
+            # dependency that breaks quietly if the library ever tidies
+            # its namespace.
             psutil.time.sleep(args.interval)
     except KeyboardInterrupt:
         logging.info("Process Monitor Stopped by User")
